@@ -40,4 +40,4 @@ app.use('/api/attendance', verifyJWT, createProxyMiddleware({ target: 'http://lo
 
 app.listen(PORT, () => {
     console.log(`API Gateway is running on http://localhost:${PORT}`);
-});
+});// Note: Rate limiter configured 
