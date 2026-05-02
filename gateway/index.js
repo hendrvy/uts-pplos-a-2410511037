@@ -10,15 +10,15 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// 1. Basic Rate Limiting (60 req/menit per IP) - SYARAT UTS
+// 1. Basic Rate Limiting
 const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 menit
+    windowMs: 1 * 60 * 1000, 
     max: 60,
     message: { message: 'Too many requests, please try again later.' }
 });
 app.use(limiter);
 
-// 2. Middleware Validasi JWT di Gateway - SYARAT UTS
+// 2. Middleware Validasi JWT
 const verifyJWT = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'Unauthorized: No token provided' });
@@ -31,13 +31,33 @@ const verifyJWT = (req, res, next) => {
 };
 
 // 3. Routing ke Microservices (Proxy)
-// Endpoint Auth tidak perlu JWT karena user harus login dulu
-app.use('/api/auth', createProxyMiddleware({ target: 'http://localhost:3001', changeOrigin: true }));
 
-// Endpoint API Pegawai dan Absensi diproteksi JWT
-app.use('/api/employees', verifyJWT, createProxyMiddleware({ target: 'http://localhost:8000', changeOrigin: true }));
-app.use('/api/attendance', verifyJWT, createProxyMiddleware({ target: 'http://localhost:3002', changeOrigin: true }));
+// Auth Service (Node.js) -> Tidak butuh pathRewrite
+app.use('/api/auth', createProxyMiddleware({ 
+    target: 'http://127.0.0.1:3001', 
+    changeOrigin: true 
+}));
+
+// Employee Service (Laravel) -> WAJIB dipaksa pakai originalUrl agar rute & query param tidak hilang
+app.use('/api/employees', verifyJWT, createProxyMiddleware({ 
+    target: 'http://127.0.0.1:8000', 
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+        return req.originalUrl; // Paksa kembalikan URL utuh (contoh: /api/employees)
+    }
+}));
+
+// Attendance Service (Node.js) -> Tidak butuh pathRewrite
+app.use('/api/attendance', verifyJWT, createProxyMiddleware({ 
+    target: 'http://127.0.0.1:3002', 
+    changeOrigin: true 
+}));
 
 app.listen(PORT, () => {
     console.log(`API Gateway is running on http://localhost:${PORT}`);
-});// Note: Rate limiter configured 
+});
+
+app.get('/api/auth/oauth/github', (req, res) => {
+    // Teruskan ke Auth Service di port 3001
+    res.redirect('http://localhost:3001/oauth/github');
+});
